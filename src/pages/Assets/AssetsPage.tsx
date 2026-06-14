@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Plus,
   Edit2,
@@ -26,8 +26,29 @@ import Empty from '@/components/Empty/Empty';
 
 type TabType = 'appliances' | 'vehicles' | 'assets' | 'borrow';
 
-const AssetsPage = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('appliances');
+interface AssetsPageProps {
+  initialTab?: string;
+}
+
+const AssetsPage = ({ initialTab }: AssetsPageProps) => {
+  const tabMap: Record<string, TabType> = {
+    list: 'assets',
+    vehicle: 'vehicles',
+    borrow: 'borrow',
+    appliances: 'appliances',
+    vehicles: 'vehicles',
+    assets: 'assets',
+  };
+
+  const [activeTab, setActiveTab] = useState<TabType>(
+    (initialTab && tabMap[initialTab]) || 'appliances'
+  );
+
+  useEffect(() => {
+    if (initialTab && tabMap[initialTab]) {
+      setActiveTab(tabMap[initialTab]);
+    }
+  }, [initialTab]);
   const [showAssetModal, setShowAssetModal] = useState(false);
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showBorrowModal, setShowBorrowModal] = useState(false);

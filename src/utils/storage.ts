@@ -2,6 +2,16 @@ import type { AppData } from '@/types';
 
 const STORAGE_KEY = 'family-space-data';
 
+const ALL_STORAGE_KEYS = [
+  STORAGE_KEY,
+  'family-space-family',
+  'family-space-album',
+  'family-space-assets',
+  'family-space-schedule',
+  'family-space-memo',
+  'family-space-settings',
+];
+
 export const loadData = (): AppData | null => {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
@@ -23,11 +33,28 @@ export const saveData = (data: AppData): void => {
 };
 
 export const clearData = (): void => {
-  localStorage.removeItem(STORAGE_KEY);
+  ALL_STORAGE_KEYS.forEach((key) => {
+    localStorage.removeItem(key);
+  });
+  sessionStorage.clear();
+};
+
+export const clearAllZustandStorage = (): void => {
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.startsWith('family-space-') || key === STORAGE_KEY)) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach((key) => localStorage.removeItem(key));
+  sessionStorage.clear();
 };
 
 export const generateId = (): string => {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+  return (
+    Date.now().toString(36) + Math.random().toString(36).substr(2, 9)
+  );
 };
 
 export const getStorageSize = (): number => {

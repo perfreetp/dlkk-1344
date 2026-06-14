@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Lock, Shield } from 'lucide-react';
 import Layout from '@/components/Layout/Layout';
@@ -10,10 +10,12 @@ import SchedulePage from '@/pages/Schedule/SchedulePage';
 import MemoPage from '@/pages/Memo/MemoPage';
 import SettingsPage from '@/pages/Settings/SettingsPage';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { useNavigationStore } from '@/store/useNavigationStore';
 import { verifyPassword } from '@/utils/crypto';
 
 function App() {
   const { settings, setUnlocked, isUnlocked } = useSettingsStore();
+  const { targetRoute, targetParams, clearNavigation } = useNavigationStore();
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showFirstTime, setShowFirstTime] = useState(false);
@@ -155,16 +157,101 @@ function App() {
     );
   }
 
+  const pageProps = useMemo(() => {
+    if (!targetRoute || !targetParams) return {};
+    return {
+      family: {
+        initialMemberId: targetParams.memberId as string,
+        initialTab: targetParams.tab as string,
+      },
+      album: {
+        initialAlbumId: targetParams.albumId as string,
+        initialPhotoId: targetParams.photoId as string,
+      },
+      assets: {
+        initialTab: targetParams.tab as string,
+      },
+      schedule: {
+        initialTab: targetParams.tab as 'trips' | 'medications' | 'menu',
+        highlightMeal: targetParams.weekStart
+          ? {
+              weekStart: targetParams.weekStart as string,
+              day: targetParams.day as number,
+              mealType: targetParams.mealType as 'breakfast' | 'lunch' | 'dinner',
+            }
+          : undefined,
+        initialTripId: targetParams.tripId as string,
+      },
+      memo: {
+        initialTab: targetParams.tab as 'wall' | 'search' | 'contacts',
+      },
+    };
+  }, [targetRoute, targetParams]);
+
+  useEffect(() => {
+    if (targetRoute && targetParams) {
+      const timer = setTimeout(() => {
+        clearNavigation();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [targetRoute, targetParams, clearNavigation]);
+
   return (
     <Router>
       <Layout>
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/family" element={<FamilyPage />} />
-          <Route path="/album" element={<AlbumPage />} />
-          <Route path="/assets" element={<AssetsPage />} />
-          <Route path="/schedule" element={<SchedulePage />} />
-          <Route path="/memo" element={<MemoPage />} />
+          <Route
+            path="/family"
+            element={
+              targetRoute === '/family' ? (
+                <FamilyPage {...pageProps.family} />
+              ) : (
+                <FamilyPage />
+              )
+            }
+          />
+          <Route
+            path="/album"
+            element={
+              targetRoute === '/album' ? (
+                <AlbumPage {...pageProps.album} />
+              ) : (
+                <AlbumPage />
+              )
+            }
+          />
+          <Route
+            path="/assets"
+            element={
+              targetRoute === '/assets' ? (
+                <AssetsPage {...pageProps.assets} />
+              ) : (
+                <AssetsPage />
+              )
+            }
+          />
+          <Route
+            path="/schedule"
+            element={
+              targetRoute === '/schedule' ? (
+                <SchedulePage {...pageProps.schedule} />
+              ) : (
+                <SchedulePage />
+              )
+            }
+          />
+          <Route
+            path="/memo"
+            element={
+              targetRoute === '/memo' ? (
+                <MemoPage {...pageProps.memo} />
+              ) : (
+                <MemoPage />
+              )
+            }
+          />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </Layout>

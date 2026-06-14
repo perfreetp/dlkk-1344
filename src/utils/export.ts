@@ -5,6 +5,7 @@ import { useScheduleStore } from '@/store/useScheduleStore';
 import { useMemoStore } from '@/store/useMemoStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import type { AppData } from '@/types';
+import { clearAllZustandStorage } from './storage';
 
 export const exportAllData = (): AppData => {
   const family = useFamilyStore.getState();
@@ -31,52 +32,48 @@ export const exportAllData = (): AppData => {
 };
 
 export const importAllData = (data: AppData): void => {
-  const family = useFamilyStore.getState();
-  const album = useAlbumStore.getState();
-  const assets = useAssetsStore.getState();
-  const schedule = useScheduleStore.getState();
-  const memo = useMemoStore.getState();
-  const settings = useSettingsStore.getState();
+  clearAllZustandStorage();
 
-  if (data.familyMembers) {
+  if (data.familyMembers !== undefined) {
     useFamilyStore.setState({
-      members: data.familyMembers,
+      members: data.familyMembers || [],
       importantDates: data.importantDates || [],
     });
   }
 
-  if (data.albums) {
+  if (data.albums !== undefined) {
     useAlbumStore.setState({
-      albums: data.albums,
+      albums: data.albums || [],
       photos: data.photos || [],
     });
   }
 
-  if (data.assets) {
+  if (data.assets !== undefined) {
     useAssetsStore.setState({
-      assets: data.assets,
+      assets: data.assets || [],
       vehicles: data.vehicles || [],
       borrowItems: data.borrowItems || [],
     });
   }
 
-  if (data.trips) {
+  if (data.trips !== undefined) {
     useScheduleStore.setState({
-      trips: data.trips,
+      trips: data.trips || [],
       medications: data.medications || [],
       menuPlan: data.menuPlan || null,
     });
   }
 
-  if (data.stickyNotes) {
+  if (data.stickyNotes !== undefined) {
     useMemoStore.setState({
-      stickyNotes: data.stickyNotes,
+      stickyNotes: data.stickyNotes || [],
     });
   }
 
-  if (data.settings) {
+  if (data.settings !== undefined) {
     useSettingsStore.setState({
       settings: data.settings,
+      isUnlocked: false,
     });
   }
 };

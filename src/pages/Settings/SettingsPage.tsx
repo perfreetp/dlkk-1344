@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Download,
   Upload,
@@ -11,24 +11,55 @@ import {
   CheckCircle,
   FileJson,
   Settings,
+  Users,
+  Images,
+  Package,
+  StickyNote as StickyNoteIcon,
 } from 'lucide-react';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { useFamilyStore } from '@/store/useFamilyStore';
+import { useAlbumStore } from '@/store/useAlbumStore';
+import { useAssetsStore } from '@/store/useAssetsStore';
+import { useMemoStore } from '@/store/useMemoStore';
 import { hashPassword, verifyPassword } from '@/utils/crypto';
-import { exportAllData, importAllData, downloadAsFile, readJsonFile, getExportFilename } from '@/utils/export';
-import { getStorageSize, formatFileSize, clearData } from '@/utils/storage';
+import {
+  exportAllData,
+  importAllData,
+  downloadAsFile,
+  readJsonFile,
+  getExportFilename,
+} from '@/utils/export';
+import {
+  getStorageSize,
+  formatFileSize,
+  clearAllZustandStorage,
+} from '@/utils/storage';
 import Modal from '@/components/Modal/Modal';
 import type { AppData } from '@/types';
 
 const SettingsPage = () => {
-  const { settings, setPassword, setUnlocked, isUnlocked } = useSettingsStore();
+  const { settings, setPassword, setUnlocked, isUnlocked } =
+    useSettingsStore();
+  const { members } = useFamilyStore();
+  const { photos } = useAlbumStore();
+  const { assets } = useAssetsStore();
+  const { stickyNotes } = useMemoStore();
+
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
-  const [passwordMode, setPasswordMode] = useState<'set' | 'verify' | 'change'>('set');
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [passwordMode, setPasswordMode] = useState<
+    'set' | 'verify' | 'change'
+  >('set');
   const [storageSize, setStorageSize] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importData, setImportData] = useState<AppData | null>(null);
 
   const hasPassword = !!settings.passwordHash;
+
+  useEffect(() => {
+    setStorageSize(getStorageSize());
+  }, []);
 
   const handleExport = async () => {
     if (hasPassword && !isUnlocked) {
@@ -69,7 +100,11 @@ const SettingsPage = () => {
       importAllData(importData);
       setShowImportConfirm(false);
       setImportData(null);
-      alert('导入成功！');
+      setStorageSize(getStorageSize());
+      setTimeout(() => {
+        alert('导入成功！数据已恢复，即将刷新页面...');
+        window.location.reload();
+      }, 300);
     }
   };
 
@@ -83,12 +118,15 @@ const SettingsPage = () => {
   };
 
   const handleClearData = () => {
-    if (confirm('确定要清空所有数据吗？此操作不可恢复！')) {
-      if (confirm('再次确认：所有数据将被永久删除！')) {
-        clearData();
-        window.location.reload();
-      }
-    }
+    setShowClearConfirm(true);
+  };
+
+  const doClearData = () => {
+    clearAllZustandStorage();
+    setShowClearConfirm(false);
+    setTimeout(() => {
+      window.location.reload();
+    }, 300);
   };
 
   const handleUnlock = async (password: string) => {
@@ -126,7 +164,9 @@ const SettingsPage = () => {
             </div>
             <div>
               <h3 className="text-lg font-bold text-gray-800">导出数据</h3>
-              <p className="text-sm text-gray-500">将所有数据打包为JSON文件下载</p>
+              <p className="text-sm text-gray-500">
+                将所有数据打包为JSON文件下载，包含密码设置
+              </p>
             </div>
           </div>
           <button onClick={handleExport} className="btn btn-primary w-full">
@@ -145,7 +185,9 @@ const SettingsPage = () => {
             </div>
             <div>
               <h3 className="text-lg font-bold text-gray-800">导入数据</h3>
-              <p className="text-sm text-gray-500">从备份文件恢复所有数据</p>
+              <p className="text-sm text-gray-500">
+                从备份文件恢复所有数据和密码设置
+              </p>
             </div>
           </div>
           <button onClick={handleImportClick} className="btn btn-secondary w-full">
@@ -160,16 +202,18 @@ const SettingsPage = () => {
             onChange={handleFileChange}
           />
           <p className="text-xs text-gray-400 mt-3 text-center">
-            导入将覆盖当前所有数据
+            导入将覆盖当前所有数据，页面会自动刷新
           </p>
         </div>
       </div>
 
       <div className="card card-content">
         <div className="flex items-center gap-4 mb-6">
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
-            hasPassword ? 'bg-primary-100' : 'bg-gray-100'
-          }`}>
+          <div
+            className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
+              hasPassword ? 'bg-primary-100' : 'bg-gray-100'
+            }`}
+          >
             {hasPassword ? (
               <Lock size={28} className="text-primary-600" />
             ) : (
@@ -190,20 +234,24 @@ const SettingsPage = () => {
           </button>
         </div>
 
-        <div className={`p-4 rounded-xl ${
-          hasPassword ? 'bg-green-50' : 'bg-amber-50'
-        }`}>
+        <div
+          className={`p-4 rounded-xl ${
+            hasPassword ? 'bg-green-50' : 'bg-amber-50'
+          }`}
+        >
           <div className="flex items-center gap-3">
             {hasPassword ? (
               <CheckCircle size={20} className="text-green-600" />
             ) : (
               <AlertTriangle size={20} className="text-amber-600" />
             )}
-            <span className={`text-sm ${
-              hasPassword ? 'text-green-700' : 'text-amber-700'
-            }`}>
+            <span
+              className={`text-sm ${
+                hasPassword ? 'text-green-700' : 'text-amber-700'
+              }`}
+            >
               {hasPassword
-                ? '您的隐私数据已受密码保护'
+                ? '您的隐私数据已受密码保护，密码已包含在备份文件中'
                 : '建议设置密码来保护您的隐私数据'}
             </span>
           </div>
@@ -218,7 +266,10 @@ const SettingsPage = () => {
           <div className="flex-1">
             <h3 className="text-lg font-bold text-gray-800">存储信息</h3>
             <p className="text-sm text-gray-500">
-              当前占用空间：{formatFileSize(storageSize)}
+              当前占用空间：
+              <span className="font-semibold text-gray-700 ml-1">
+                {formatFileSize(storageSize)}
+              </span>
             </p>
           </div>
           <button
@@ -230,21 +281,37 @@ const SettingsPage = () => {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="p-3 bg-warm-50 rounded-xl text-center">
-            <p className="text-2xl font-bold text-primary-500">-</p>
-            <p className="text-xs text-gray-500">家庭成员</p>
+          <div className="p-4 bg-warm-50 rounded-xl text-center">
+            <div className="flex items-center justify-center gap-1 mb-2">
+              <Users size={18} className="text-primary-500" />
+            </div>
+            <p className="text-2xl font-bold text-primary-500">
+              {members.length}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">家庭成员</p>
           </div>
-          <div className="p-3 bg-sky-50 rounded-xl text-center">
-            <p className="text-2xl font-bold text-sky-500">-</p>
-            <p className="text-xs text-gray-500">照片数量</p>
+          <div className="p-4 bg-sky-50 rounded-xl text-center">
+            <div className="flex items-center justify-center gap-1 mb-2">
+              <Images size={18} className="text-sky-500" />
+            </div>
+            <p className="text-2xl font-bold text-sky-500">{photos.length}</p>
+            <p className="text-xs text-gray-500 mt-1">照片数量</p>
           </div>
-          <div className="p-3 bg-green-50 rounded-xl text-center">
-            <p className="text-2xl font-bold text-green-500">-</p>
-            <p className="text-xs text-gray-500">资产数量</p>
+          <div className="p-4 bg-green-50 rounded-xl text-center">
+            <div className="flex items-center justify-center gap-1 mb-2">
+              <Package size={18} className="text-green-500" />
+            </div>
+            <p className="text-2xl font-bold text-green-500">{assets.length}</p>
+            <p className="text-xs text-gray-500 mt-1">资产数量</p>
           </div>
-          <div className="p-3 bg-pink-50 rounded-xl text-center">
-            <p className="text-2xl font-bold text-pink-500">-</p>
-            <p className="text-xs text-gray-500">便签数量</p>
+          <div className="p-4 bg-pink-50 rounded-xl text-center">
+            <div className="flex items-center justify-center gap-1 mb-2">
+              <StickyNoteIcon size={18} className="text-pink-500" />
+            </div>
+            <p className="text-2xl font-bold text-pink-500">
+              {stickyNotes.filter((n) => n.content).length}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">便签数量</p>
           </div>
         </div>
       </div>
@@ -256,7 +323,9 @@ const SettingsPage = () => {
           </div>
           <div className="flex-1">
             <h3 className="text-lg font-bold text-gray-800">危险操作</h3>
-            <p className="text-sm text-gray-500">清空所有本地数据</p>
+            <p className="text-sm text-gray-500">
+              清空所有本地数据，重新进入将是全新的空白状态
+            </p>
           </div>
         </div>
         <button
@@ -267,7 +336,7 @@ const SettingsPage = () => {
           清空所有数据
         </button>
         <p className="text-xs text-red-400 mt-2 text-center">
-          此操作不可恢复，请谨慎操作
+          此操作不可恢复，建议先导出备份
         </p>
       </div>
 
@@ -287,6 +356,7 @@ const SettingsPage = () => {
           onVerify={handleUnlock}
           onSet={handleSetNewPassword}
           hasPassword={hasPassword}
+          onClose={() => setShowPasswordModal(false)}
         />
       </Modal>
 
@@ -299,11 +369,15 @@ const SettingsPage = () => {
         <div className="space-y-4">
           <div className="p-4 bg-amber-50 rounded-xl">
             <div className="flex items-start gap-3">
-              <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <AlertTriangle
+                size={20}
+                className="text-amber-600 flex-shrink-0 mt-0.5"
+              />
               <div>
                 <p className="font-medium text-amber-800">重要提醒</p>
                 <p className="text-sm text-amber-700 mt-1">
-                  导入数据将覆盖当前所有数据，此操作不可撤销。
+                  导入数据将覆盖当前所有数据，包含密码设置。
+                  导入完成后页面将自动刷新，请耐心等待。
                 </p>
               </div>
             </div>
@@ -313,7 +387,9 @@ const SettingsPage = () => {
             <FileJson size={24} className="text-blue-500" />
             <div>
               <p className="font-medium text-gray-800">备份文件</p>
-              <p className="text-sm text-gray-500">包含所有家庭数据</p>
+              <p className="text-sm text-gray-500">
+                包含{importData ? '：' + importData.familyMembers?.length + '位成员，' + importData.photos?.length + '张照片等' : '所有家庭数据和密码设置'}
+              </p>
             </div>
           </div>
 
@@ -330,6 +406,64 @@ const SettingsPage = () => {
           </div>
         </div>
       </Modal>
+
+      <Modal
+        isOpen={showClearConfirm}
+        onClose={() => setShowClearConfirm(false)}
+        title="确认清空所有数据"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="p-4 bg-red-50 rounded-xl">
+            <div className="flex items-start gap-3">
+              <AlertTriangle
+                size={20}
+                className="text-red-600 flex-shrink-0 mt-0.5"
+              />
+              <div>
+                <p className="font-medium text-red-800">
+                  此操作将永久删除所有数据！
+                </p>
+                <p className="text-sm text-red-700 mt-1">
+                  包括家庭成员、照片、资产、日程、便签和密码设置。
+                  页面将自动刷新，进入全新的空白状态。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                id="confirm1"
+                className="w-4 h-4 text-red-500 rounded"
+              />
+              <span>我知道我在做什么，不是误操作</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                id="confirm2"
+                className="w-4 h-4 text-red-500 rounded"
+              />
+              <span>我已经导出了必要的备份文件（可选）</span>
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={() => setShowClearConfirm(false)}
+              className="btn btn-secondary"
+            >
+              取消
+            </button>
+            <button onClick={doClearData} className="btn bg-red-500 text-white hover:bg-red-600">
+              确认清空
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
@@ -339,9 +473,15 @@ interface PasswordModalProps {
   onVerify: (password: string) => Promise<boolean>;
   onSet: (password: string) => Promise<void>;
   hasPassword: boolean;
+  onClose: () => void;
 }
 
-const PasswordModal = ({ mode, onVerify, onSet, hasPassword }: PasswordModalProps) => {
+const PasswordModal = ({
+  mode,
+  onVerify,
+  onSet,
+  hasPassword,
+}: PasswordModalProps) => {
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -403,9 +543,12 @@ const PasswordModal = ({ mode, onVerify, onSet, hasPassword }: PasswordModalProp
           {error && <p className="text-red-500 text-sm">{error}</p>}
           <div className="flex justify-end gap-3 pt-2">
             <button
-              onClick={() => {}}
+              type="button"
+              onClick={() => {
+                setStep(1);
+                setPassword('');
+              }}
               className="btn btn-secondary"
-              onClickCapture={() => {}}
             >
               取消
             </button>
@@ -452,13 +595,11 @@ const PasswordModal = ({ mode, onVerify, onSet, hasPassword }: PasswordModalProp
           <p className="text-xs text-gray-400">
             密码用于保护您的隐私数据，请牢记密码。
             忘记密码将无法恢复数据，只能清空重置。
+            密码设置将包含在导出备份中。
           </p>
           <div className="flex justify-end gap-3 pt-2">
             {mode === 'change' && step === 2 && (
-              <button
-                onClick={() => setStep(1)}
-                className="btn btn-secondary"
-              >
+              <button onClick={() => setStep(1)} className="btn btn-secondary">
                 返回
               </button>
             )}

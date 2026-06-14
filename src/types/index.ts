@@ -37,6 +37,7 @@ export interface Photo {
   dataUrl: string;
   name: string;
   tags: string[];
+  order: number;
   createdAt: string;
 }
 
@@ -144,4 +145,6 @@ export type SearchResult = {
   item: unknown;
   title: string;
   description: string;
+  route?: string;
+  params?: Record<string, string | number>;
 };

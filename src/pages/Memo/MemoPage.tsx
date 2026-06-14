@@ -10,9 +10,15 @@ import {
   Mail,
   Users,
   FileText,
+  MapPin,
+  LayoutGrid,
+  List,
+  ChevronRight,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useMemoStore } from '@/store/useMemoStore';
 import { useFamilyStore } from '@/store/useFamilyStore';
+import { useNavigationStore } from '@/store/useNavigationStore';
 import { searchAll } from '@/utils/search';
 import type { StickyNote, SearchResult } from '@/types';
 import Avatar from '@/components/Avatar/Avatar';
@@ -20,6 +26,11 @@ import Modal from '@/components/Modal/Modal';
 import Empty from '@/components/Empty/Empty';
 
 type TabType = 'wall' | 'search' | 'contacts';
+type ContactsViewType = 'card' | 'list';
+
+interface MemoPageProps {
+  initialTab?: TabType;
+}
 
 const noteColors = [
   { key: 'yellow', class: 'bg-note-yellow', label: '黄色' },
@@ -30,8 +41,11 @@ const noteColors = [
   { key: 'orange', class: 'bg-note-orange', label: '橙色' },
 ];
 
-const MemoPage = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('wall');
+const MemoPage = ({ initialTab }: MemoPageProps) => {
+  const navigate = useNavigate();
+  const { setNavigation } = useNavigationStore();
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'wall');
+  const [contactsView, setContactsView] = useState<ContactsViewType>('card');
   const { stickyNotes, addStickyNote, updateStickyNote, deleteStickyNote, updateNotePosition } = useMemoStore();
   const { members } = useFamilyStore();
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +63,12 @@ const MemoPage = () => {
   ];
 
   useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
+  useEffect(() => {
     if (searchQuery.trim()) {
       const results = searchAll(searchQuery);
       setSearchResults(results);
@@ -56,6 +76,15 @@ const MemoPage = () => {
       setSearchResults([]);
     }
   }, [searchQuery]);
+
+  const handleSearchResultClick = (result: SearchResult) => {
+    if (result.route) {
+      if (result.params) {
+        setNavigation(result.route, result.params);
+      }
+      navigate(result.route);
+    }
+  };
 
   const handleAddNote = () => {
     const newNote = {
@@ -262,13 +291,14 @@ const MemoPage = () => {
                 {searchResults.map((result, index) => (
                   <div
                     key={index}
-                    className="p-4 bg-warm-50 rounded-xl hover:bg-warm-100 transition-colors cursor-pointer"
+                    onClick={() => handleSearchResultClick(result)}
+                    className="p-4 bg-warm-50 rounded-xl hover:bg-warm-100 transition-colors cursor-pointer group"
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
                         <FileText size={20} className="text-primary-500" />
                       </div>
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="badge bg-primary-100 text-primary-600">
                             {result.type}
@@ -277,10 +307,14 @@ const MemoPage = () => {
                             {result.title}
                           </h3>
                         </div>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <p className="text-sm text-gray-500 mt-1 truncate">
                           {result.description}
                         </p>
                       </div>
+                      <ChevronRight
+                        size={18}
+                        className="text-gray-300 group-hover:text-primary-500 transition-colors"
+                      />
                     </div>
                   </div>
                 ))}
@@ -308,47 +342,186 @@ const MemoPage = () => {
 
           {activeTab === 'contacts' && (
             <div className="no-print-area">
-              <div className="flex justify-between items-center mb-4">
-                <p className="text-sm text-gray-500">
-                  共 {members.length} 位家庭成员
-                </p>
-                <button onClick={handlePrint} className="btn btn-secondary">
+              <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
+                <div className="flex items-center gap-4">
+                  <p className="text-sm text-gray-500">
+                    共 {members.length} 位家庭成员
+                  </p>
+                  <div className="flex items-center bg-warm-50 rounded-lg p-1 print:hidden">
+                    <button
+                      onClick={() => setContactsView('card')}
+                      className={`p-2 rounded-md transition-all ${
+                        contactsView === 'card'
+                          ? 'bg-white shadow-sm text-primary-500'
+                          : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                      title="卡片视图"
+                    >
+                      <LayoutGrid size={16} />
+                    </button>
+                    <button
+                      onClick={() => setContactsView('list')}
+                      className={`p-2 rounded-md transition-all ${
+                        contactsView === 'list'
+                          ? 'bg-white shadow-sm text-primary-500'
+                          : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                      title="名单视图"
+                    >
+                      <List size={16} />
+                    </button>
+                  </div>
+                </div>
+                <button onClick={handlePrint} className="btn btn-secondary print:hidden">
                   <Printer size={18} />
                   打印通讯录
                 </button>
               </div>
 
               <div className="print-content">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {members.map((member) => (
-                    <div
-                      key={member.id}
-                      className="p-4 bg-warm-50 rounded-xl flex items-center gap-4"
-                    >
-                      <Avatar name={member.name} gender={member.gender} size="lg" />
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-gray-800">
-                          {member.name}
-                          <span className="text-sm text-primary-500 ml-2">
-                            {member.relation}
-                          </span>
-                        </h3>
-                        {member.phone && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
-                            <Phone size={14} />
-                            <span>{member.phone}</span>
-                          </div>
-                        )}
-                        {member.email && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
-                            <Mail size={14} />
-                            <span className="truncate">{member.email}</span>
-                          </div>
-                        )}
+                {contactsView === 'card' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {members.map((member) => (
+                      <div
+                        key={member.id}
+                        className="p-4 bg-warm-50 rounded-xl flex items-center gap-4"
+                      >
+                        <Avatar name={member.name} gender={member.gender} size="lg" />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-gray-800">
+                            {member.name}
+                            <span className="text-sm text-primary-500 ml-2">
+                              {member.relation}
+                            </span>
+                          </h3>
+                          {member.phone && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
+                              <Phone size={14} />
+                              <span>{member.phone}</span>
+                            </div>
+                          )}
+                          {member.email && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
+                              <Mail size={14} />
+                              <span className="truncate">{member.email}</span>
+                            </div>
+                          )}
+                          {member.address && (
+                            <div className="flex items-start gap-2 text-sm text-gray-600 mt-1">
+                              <MapPin size={14} className="mt-0.5 flex-shrink-0" />
+                              <span className="truncate">{member.address}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                )}
+
+                {contactsView === 'list' && (
+                  <div>
+                    <div className="print-only-block mb-4 print-header">
+                      <h2 className="text-xl font-bold text-center text-gray-800 mb-1">
+                        家庭通讯录
+                      </h2>
+                      <p className="text-center text-sm text-gray-500">
+                        共 {members.length} 位家庭成员 · {new Date().toLocaleDateString('zh-CN')}
+                      </p>
                     </div>
-                  ))}
-                </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="bg-warm-100">
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-warm-200">
+                              序号
+                            </th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-warm-200">
+                              姓名
+                            </th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-warm-200">
+                              关系
+                            </th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-warm-200">
+                              电话
+                            </th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-warm-200">
+                              邮箱
+                            </th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b border-warm-200">
+                              地址
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {members.map((member, index) => (
+                            <tr
+                              key={member.id}
+                              className={`${
+                                index % 2 === 0 ? 'bg-white' : 'bg-warm-50/50'
+                              } hover:bg-warm-50 transition-colors`}
+                            >
+                              <td className="px-4 py-3 text-sm text-gray-500 border-b border-warm-100">
+                                {index + 1}
+                              </td>
+                              <td className="px-4 py-3 border-b border-warm-100">
+                                <div className="flex items-center gap-3">
+                                  <div className="print:hidden">
+                                    <Avatar name={member.name} gender={member.gender} size="sm" />
+                                  </div>
+                                  <span className="font-medium text-gray-800">
+                                    {member.name}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600 border-b border-warm-100">
+                                <span className="inline-block px-2 py-0.5 bg-primary-100 text-primary-600 rounded-full text-xs font-medium">
+                                  {member.relation}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700 border-b border-warm-100">
+                                {member.phone ? (
+                                  <a
+                                    href={`tel:${member.phone}`}
+                                    className="text-primary-600 hover:underline print:text-gray-700 print:no-underline"
+                                  >
+                                    {member.phone}
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700 border-b border-warm-100 max-w-[200px]">
+                                {member.email ? (
+                                  <a
+                                    href={`mailto:${member.email}`}
+                                    className="text-primary-600 hover:underline print:text-gray-700 print:no-underline truncate block"
+                                    title={member.email}
+                                  >
+                                    {member.email}
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700 border-b border-warm-100 max-w-[300px]">
+                                {member.address ? (
+                                  <div className="flex items-start gap-1">
+                                    <MapPin size={12} className="text-gray-400 mt-1 flex-shrink-0 print:hidden" />
+                                    <span title={member.address} className="line-clamp-2">
+                                      {member.address}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {members.length === 0 && (
@@ -393,9 +566,31 @@ const MemoPage = () => {
           .no-print-area > .flex {
             display: none !important;
           }
+          .print\\:hidden {
+            display: none !important;
+          }
+          .print-only-block {
+            display: block !important;
+          }
           .card {
             box-shadow: none !important;
             border: none !important;
+            padding: 0 !important;
+          }
+          .print-content table {
+            page-break-inside: auto;
+          }
+          .print-content tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+          body {
+            padding: 20px;
+          }
+        }
+        @media screen {
+          .print-only-block {
+            display: none;
           }
         }
       `}</style>

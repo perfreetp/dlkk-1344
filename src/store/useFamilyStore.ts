@@ -9,6 +9,23 @@ interface FamilyState {
   addMember: (member: Omit<FamilyMember, 'id'>) => void;
   updateMember: (id: string, member: Partial<FamilyMember>) => void;
   deleteMember: (id: string) => void;
+  addMemberWithRelations: (
+    member: Omit<FamilyMember, 'id'>,
+    relations?: {
+      spouseId?: string;
+      parentIds?: string[];
+      childIds?: string[];
+    }
+  ) => void;
+  updateMemberWithRelations: (
+    id: string,
+    member: Partial<FamilyMember>,
+    relations?: {
+      spouseId?: string;
+      parentIds?: string[];
+      childIds?: string[];
+    }
+  ) => void;
   addImportantDate: (date: Omit<ImportantDate, 'id'>) => void;
   updateImportantDate: (id: string, date: Partial<ImportantDate>) => void;
   deleteImportantDate: (id: string) => void;
@@ -118,20 +135,173 @@ export const useFamilyStore = create<FamilyState>()(
         set((state) => ({
           members: [...state.members, { ...member, id: generateId() }],
         })),
+      addMemberWithRelations: (member, relations) =>
+        set((state) => {
+          const newId = generateId();
+          const newMember: FamilyMember = {
+            ...member,
+            id: newId,
+            spouseId: relations?.spouseId || member.spouseId,
+            parentIds: relations?.parentIds || member.parentIds || [],
+          };
+
+          let members = [...state.members, newMember];
+
+          if (relations?.spouseId) {
+            members = members.map((m) =>
+              m.id === relations.spouseId
+                ? { ...m, spouseId: newId }
+                : m
+            );
+          }
+
+          if (relations?.childIds) {
+            relations.childIds.forEach((childId) => {
+              members = members.map((m) => {
+                if (m.id === childId) {
+                  const newParentIds = [...(m.parentIds || []), newId];
+                  return { ...m, parentIds: Array.from(new Set(newParentIds)) };
+                }
+                return m;
+              });
+            });
+          }
+
+          if (relations?.parentIds && relations.parentIds.length > 0) {
+            const gender = newMember.gender;
+            if (gender === 'male') {
+              const motherExists = members.some(
+                (p) =>
+                  relations!.parentIds!.includes(p.id) && p.gender === 'female'
+              );
+              if (motherExists) {
+                const fatherId = relations.parentIds.find(
+                  (pid) =>
+                    members.find((m) => m.id === pid)?.gender === 'male'
+                );
+                const motherId = relations.parentIds.find(
+                  (pid) =>
+                    members.find((m) => m.id === pid)?.gender === 'female'
+                );
+                if (fatherId && motherId) {
+                  members = members.map((m) =>
+                    m.id === fatherId
+                      ? { ...m, spouseId: motherId }
+                      : m
+                  );
+                  members = members.map((m) =>
+                    m.id === motherId
+                      ? { ...m, spouseId: fatherId }
+                      : m
+                  );
+                }
+              }
+            }
+          }
+
+          return { members };
+        }),
       updateMember: (id, member) =>
         set((state) => ({
           members: state.members.map((m) =>
             m.id === id ? { ...m, ...member } : m
           ),
         })),
+      updateMemberWithRelations: (id, member, relations) =>
+        set((state) => {
+          const oldMember = state.members.find((m) => m.id === id);
+          if (!oldMember) return state;
+
+          let members = state.members.map((m) =>
+            m.id === id
+              ? {
+                  ...m,
+                  ...member,
+                  spouseId:
+                    relations?.spouseId !== undefined
+                      ? relations.spouseId
+                      : m.spouseId,
+                  parentIds: relations?.parentIds || m.parentIds || [],
+                }
+              : m
+          );
+
+          const newSpouseId =
+            relations?.spouseId !== undefined
+              ? relations.spouseId
+              : oldMember.spouseId;
+          const oldSpouseId = oldMember.spouseId;
+
+          if (oldSpouseId && oldSpouseId !== newSpouseId) {
+            members = members.map((m) =>
+              m.id === oldSpouseId ? { ...m, spouseId: undefined } : m
+            );
+          }
+
+          if (newSpouseId && newSpouseId !== oldSpouseId) {
+            members = members.map((m) =>
+              m.id === newSpouseId ? { ...m, spouseId: id } : m
+            );
+          }
+
+          if (relations?.childIds) {
+            relations.childIds.forEach((childId) => {
+              members = members.map((m) => {
+                if (m.id === childId) {
+                  const newParentIds = [...(m.parentIds || []), id];
+                  return { ...m, parentIds: Array.from(new Set(newParentIds)) };
+                }
+                return m;
+              });
+            });
+          }
+
+          if (relations?.parentIds && relations.parentIds.length >= 2) {
+            const fatherId = relations.parentIds.find(
+              (pid) =>
+                members.find((m) => m.id === pid)?.gender === 'male'
+            );
+            const motherId = relations.parentIds.find(
+              (pid) =>
+                members.find((m) => m.id === pid)?.gender === 'female'
+            );
+            if (fatherId && motherId) {
+              members = members.map((m) =>
+                m.id === fatherId ? { ...m, spouseId: motherId } : m
+              );
+              members = members.map((m) =>
+                m.id === motherId ? { ...m, spouseId: fatherId } : m
+              );
+            }
+          }
+
+          return { members };
+        }),
       deleteMember: (id) =>
-        set((state) => ({
-          members: state.members.filter((m) => m.id !== id),
-          importantDates: state.importantDates.filter((d) => d.memberId !== id),
-        })),
+        set((state) => {
+          let members = state.members.filter((m) => m.id !== id);
+          members = members.map((m) => {
+            const newParentIds = (m.parentIds || []).filter((pid) => pid !== id);
+            const newSpouseId = m.spouseId === id ? undefined : m.spouseId;
+            return {
+              ...m,
+              parentIds: newParentIds,
+              spouseId: newSpouseId,
+            };
+          });
+          return {
+            members,
+            importantDates: state.importantDates.filter(
+              (d) => d.memberId !== id
+            ),
+          };
+        }),
       addImportantDate: (date) =>
         set((state) => ({
-          importantDates: [...state.importantDates, { ...date, id: generateId() }],
+          importantDates: [
+            ...state.importantDates,
+            { ...date, id: generateId() },
+          ],
         })),
       updateImportantDate: (id, date) =>
         set((state) => ({

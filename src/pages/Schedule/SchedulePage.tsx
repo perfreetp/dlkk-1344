@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Plus,
   Edit2,
@@ -15,24 +15,89 @@ import {
   Clock,
   X,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useScheduleStore } from '@/store/useScheduleStore';
 import type { Trip, Medication } from '@/types';
-import { formatDate, daysUntil, getWeekDates, getWeekDayName, getMonday, getTodayStr } from '@/utils/date';
+import {
+  formatDate,
+  daysUntil,
+  getWeekDates,
+  getWeekDayName,
+  getMonday,
+} from '@/utils/date';
 import Modal from '@/components/Modal/Modal';
 import Empty from '@/components/Empty/Empty';
 
 type TabType = 'trips' | 'medications' | 'menu';
 
-const SchedulePage = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('trips');
+interface SchedulePageProps {
+  initialTab?: TabType;
+  highlightMeal?: {
+    weekStart?: string;
+    day?: number;
+    mealType?: 'breakfast' | 'lunch' | 'dinner';
+  };
+}
+
+const SchedulePage = ({ initialTab, highlightMeal }: SchedulePageProps) => {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<TabType>(
+    initialTab || 'trips'
+  );
   const [showTripModal, setShowTripModal] = useState(false);
   const [showMedModal, setShowMedModal] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   const [editingMed, setEditingMed] = useState<Medication | null>(null);
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
-  const [currentWeek, setCurrentWeek] = useState(getMonday(new Date()));
+  const [currentWeek, setCurrentWeek] = useState<Date>(
+    highlightMeal?.weekStart
+      ? new Date(highlightMeal.weekStart)
+      : getMonday(new Date())
+  );
+  const [highlightCell, setHighlightCell] = useState<
+    | { day: number; mealType: 'breakfast' | 'lunch' | 'dinner' }
+    | undefined
+  >(
+    highlightMeal?.day !== undefined && highlightMeal?.mealType
+      ? { day: highlightMeal.day, mealType: highlightMeal.mealType }
+      : undefined
+  );
 
-  const { trips, medications, menuPlan, addTrip, updateTrip, deleteTrip, toggleTripChecklist, addMedication, updateMedication, deleteMedication, updateMeal, setMenuPlan } = useScheduleStore();
+  const {
+    trips,
+    medications,
+    menuPlan,
+    addTrip,
+    updateTrip,
+    deleteTrip,
+    toggleTripChecklist,
+    addMedication,
+    updateMedication,
+    deleteMedication,
+    updateMeal,
+    setMenuPlan,
+  } = useScheduleStore();
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+    if (highlightMeal?.weekStart) {
+      setCurrentWeek(new Date(highlightMeal.weekStart));
+    }
+    if (
+      highlightMeal?.day !== undefined &&
+      highlightMeal?.mealType
+    ) {
+      setHighlightCell({
+        day: highlightMeal.day,
+        mealType: highlightMeal.mealType,
+      });
+      setTimeout(() => {
+        setHighlightCell(undefined);
+      }, 3000);
+    }
+  }, [initialTab, highlightMeal]);
 
   const tabs = [
     { key: 'trips' as TabType, label: '旅行计划', icon: Plane },
@@ -90,7 +155,10 @@ const SchedulePage = () => {
       memberId: formData.get('memberId') as string,
       dosage: formData.get('dosage') as string,
       times: timesStr ? timesStr.split(',').map((t) => t.trim()) : [],
-      frequency: formData.get('frequency') as 'daily' | 'weekly' | 'as-needed',
+      frequency: formData.get('frequency') as
+        | 'daily'
+        | 'weekly'
+        | 'as-needed',
       startDate: formData.get('startDate') as string,
       endDate: formData.get('endDate') as string,
       note: formData.get('note') as string,
@@ -106,7 +174,11 @@ const SchedulePage = () => {
 
   const weekDates = getWeekDates(currentWeek.toISOString().split('T')[0]);
   const mealTypes = ['breakfast', 'lunch', 'dinner'] as const;
-  const mealTypeNames = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐' };
+  const mealTypeNames = {
+    breakfast: '早餐',
+    lunch: '午餐',
+    dinner: '晚餐',
+  };
 
   const prevWeek = () => {
     const newDate = new Date(currentWeek);
@@ -122,15 +194,26 @@ const SchedulePage = () => {
 
   const getMealDishes = (day: number, type: string): string[] => {
     if (!menuPlan) return [];
-    const meal = menuPlan.meals.find((m) => m.day === day && m.type === type);
+    const meal = menuPlan.meals.find(
+      (m) => m.day === day && m.type === type
+    );
     return meal?.dishes || [];
   };
 
-  const handleMealEdit = (day: number, type: 'breakfast' | 'lunch' | 'dinner') => {
+  const handleMealEdit = (
+    day: number,
+    type: 'breakfast' | 'lunch' | 'dinner'
+  ) => {
     const currentDishes = getMealDishes(day, type);
-    const dishesStr = prompt('输入菜品（用逗号分隔）：', currentDishes.join(', '));
+    const dishesStr = prompt(
+      '输入菜品（用逗号分隔）：',
+      currentDishes.join(', ')
+    );
     if (dishesStr !== null) {
-      const dishes = dishesStr.split(',').map((d) => d.trim()).filter(Boolean);
+      const dishes = dishesStr
+        .split(',')
+        .map((d) => d.trim())
+        .filter(Boolean);
       updateMeal(day, type, dishes);
       if (!menuPlan) {
         setMenuPlan({
@@ -141,8 +224,13 @@ const SchedulePage = () => {
     }
   };
 
-  const sortedTrips = [...trips].sort(
-    (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+  const sortedTrips = useMemo(
+    () =>
+      [...trips].sort(
+        (a, b) =>
+          new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+      ),
+    [trips]
   );
 
   return (
@@ -194,7 +282,8 @@ const SchedulePage = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {sortedTrips.map((trip) => {
                   const days = daysUntil(trip.startDate);
-                  const completedItems = trip.checklist.filter((c) => c.done).length;
+                  const completedItems =
+                    trip.checklist.filter((c) => c.done).length;
                   const totalItems = trip.checklist.length;
                   return (
                     <div
@@ -237,11 +326,14 @@ const SchedulePage = () => {
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-gray-600">
-                          {formatDate(trip.startDate)} - {formatDate(trip.endDate)}
+                          {formatDate(trip.startDate)} -{' '}
+                          {formatDate(trip.endDate)}
                         </span>
-                        <span className={`font-bold ${
-                          days > 0 ? 'text-sky-600' : 'text-green-600'
-                        }`}>
+                        <span
+                          className={`font-bold ${
+                            days > 0 ? 'text-sky-600' : 'text-green-600'
+                          }`}
+                        >
                           {days > 0 ? `${days}天后出发` : '进行中'}
                         </span>
                       </div>
@@ -295,23 +387,32 @@ const SchedulePage = () => {
                     <div
                       key={med.id}
                       className={`p-4 rounded-2xl transition-all group ${
-                        isActive ? 'bg-mint-50 hover:shadow-md' : 'bg-gray-50 opacity-60'
+                        isActive
+                          ? 'bg-mint-50 hover:shadow-md'
+                          : 'bg-gray-50 opacity-60'
                       }`}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-4">
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                            isActive ? 'bg-mint-500 text-white' : 'bg-gray-300 text-white'
-                          }`}>
+                          <div
+                            className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                              isActive
+                                ? 'bg-mint-500 text-white'
+                                : 'bg-gray-300 text-white'
+                            }`}
+                          >
                             <Pill size={24} />
                           </div>
                           <div>
-                            <h3 className="font-bold text-gray-800">{med.name}</h3>
+                            <h3 className="font-bold text-gray-800">
+                              {med.name}
+                            </h3>
                             <p className="text-sm text-gray-500">
                               {med.dosage} · {med.times.join(', ')}
                             </p>
                             <p className="text-xs text-gray-400 mt-1">
-                              {formatDate(med.startDate)} - {formatDate(med.endDate)}
+                              {formatDate(med.startDate)} -{' '}
+                              {formatDate(med.endDate)}
                             </p>
                           </div>
                         </div>
@@ -365,8 +466,15 @@ const SchedulePage = () => {
                     <ChevronLeft size={20} />
                   </button>
                   <span className="font-semibold text-gray-700">
-                    {weekDates[0].toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })} -
-                    {weekDates[6].toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
+                    {weekDates[0].toLocaleDateString('zh-CN', {
+                      month: 'long',
+                      day: 'numeric',
+                    })}{' '}
+                    -
+                    {weekDates[6].toLocaleDateString('zh-CN', {
+                      month: 'long',
+                      day: 'numeric',
+                    })}
                   </span>
                   <button
                     onClick={nextWeek}
@@ -385,6 +493,17 @@ const SchedulePage = () => {
                 </button>
               </div>
 
+              {highlightMeal && (
+                <div className="mb-4 p-3 bg-primary-50 border border-primary-200 rounded-xl text-sm text-primary-700 flex items-center gap-2 animate-pulse">
+                  <UtensilsCrossed size={16} />
+                  已定位到搜索结果：
+                  {highlightCell &&
+                    `${getWeekDayName(highlightCell.day)}${
+                      mealTypeNames[highlightCell.mealType]
+                    }`}
+                </div>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -393,13 +512,19 @@ const SchedulePage = () => {
                         餐次
                       </th>
                       {weekDates.map((date, i) => (
-                        <th key={i} className="p-3 text-center text-sm font-medium text-gray-500 min-w-[100px]">
+                        <th
+                          key={i}
+                          className="p-3 text-center text-sm font-medium text-gray-500 min-w-[100px]"
+                        >
                           <div>{getWeekDayName(i)}</div>
-                          <div className={`text-lg font-bold ${
-                            date.toDateString() === new Date().toDateString()
-                              ? 'text-primary-500'
-                              : 'text-gray-700'
-                          }`}>
+                          <div
+                            className={`text-lg font-bold ${
+                              date.toDateString() ===
+                              new Date().toDateString()
+                                ? 'text-primary-500'
+                                : 'text-gray-700'
+                            }`}
+                          >
                             {date.getDate()}
                           </div>
                         </th>
@@ -416,28 +541,39 @@ const SchedulePage = () => {
                         </td>
                         {weekDates.map((_, dayIndex) => {
                           const dishes = getMealDishes(dayIndex, type);
+                          const isHighlighted =
+                            highlightCell?.day === dayIndex &&
+                            highlightCell?.mealType === type;
                           return (
-                            <td
-                              key={dayIndex}
-                              className="p-2"
-                            >
+                            <td key={dayIndex} className="p-2">
                               <div
                                 onClick={() => handleMealEdit(dayIndex, type)}
-                                className="min-h-[60px] p-2 bg-warm-50 rounded-lg cursor-pointer hover:bg-warm-100 transition-colors"
+                                className={`min-h-[60px] p-2 rounded-lg cursor-pointer transition-all ${
+                                  isHighlighted
+                                    ? 'bg-primary-100 ring-2 ring-primary-400 shadow-lg scale-[1.02]'
+                                    : 'bg-warm-50 hover:bg-warm-100'
+                                }`}
+                                style={
+                                  isHighlighted
+                                    ? { animation: 'pulse 1.5s infinite' }
+                                    : {}
+                                }
                               >
                                 {dishes.length > 0 ? (
                                   <div className="space-y-1">
                                     {dishes.map((dish, i) => (
                                       <span
                                         key={i}
-                                        className="inline-block text-xs bg-white px-2 py-1 rounded-full text-gray-600 mr-1 mb-1"
+                                        className="inline-block text-xs bg-white px-2 py-1 rounded-full text-gray-600 mr-1 mb-1 shadow-sm"
                                       >
                                         {dish}
                                       </span>
                                     ))}
                                   </div>
                                 ) : (
-                                  <span className="text-xs text-gray-400">点击添加</span>
+                                  <span className="text-xs text-gray-400">
+                                    点击添加
+                                  </span>
                                 )}
                               </div>
                             </td>
@@ -642,18 +778,24 @@ const SchedulePage = () => {
                 <Plane size={18} />
                 {selectedTrip.destination}
               </p>
-              <div className="flex gap-6 mt-4">
+              <div className="flex gap-6 mt-4 flex-wrap">
                 <div>
                   <p className="text-xs text-sky-100">出发日期</p>
-                  <p className="font-semibold">{formatDate(selectedTrip.startDate)}</p>
+                  <p className="font-semibold">
+                    {formatDate(selectedTrip.startDate)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-sky-100">返回日期</p>
-                  <p className="font-semibold">{formatDate(selectedTrip.endDate)}</p>
+                  <p className="font-semibold">
+                    {formatDate(selectedTrip.endDate)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-sky-100">预算</p>
-                  <p className="font-semibold">¥{selectedTrip.budget.toLocaleString()}</p>
+                  <p className="font-semibold">
+                    ¥{selectedTrip.budget.toLocaleString()}
+                  </p>
                 </div>
               </div>
             </div>
@@ -671,7 +813,10 @@ const SchedulePage = () => {
                       className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"
                     >
                       {item.done ? (
-                        <CheckCircle2 size={20} className="text-green-500" />
+                        <CheckCircle2
+                          size={20}
+                          className="text-green-500"
+                        />
                       ) : (
                         <Circle size={20} className="text-gray-300" />
                       )}
