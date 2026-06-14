@@ -19,6 +19,7 @@ import {
   Sofa,
 } from 'lucide-react';
 import { useAssetsStore } from '@/store/useAssetsStore';
+import { useNavigationStore } from '@/store/useNavigationStore';
 import type { Asset, Vehicle, BorrowItem } from '@/types';
 import { formatDate, daysUntil } from '@/utils/date';
 import Modal from '@/components/Modal/Modal';
@@ -31,6 +32,7 @@ interface AssetsPageProps {
 }
 
 const AssetsPage = ({ initialTab }: AssetsPageProps) => {
+  const { clearNavigation } = useNavigationStore();
   const tabMap: Record<string, TabType> = {
     list: 'assets',
     vehicle: 'vehicles',
@@ -47,8 +49,9 @@ const AssetsPage = ({ initialTab }: AssetsPageProps) => {
   useEffect(() => {
     if (initialTab && tabMap[initialTab]) {
       setActiveTab(tabMap[initialTab]);
+      clearNavigation();
     }
-  }, [initialTab]);
+  }, [initialTab, clearNavigation]);
   const [showAssetModal, setShowAssetModal] = useState(false);
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showBorrowModal, setShowBorrowModal] = useState(false);

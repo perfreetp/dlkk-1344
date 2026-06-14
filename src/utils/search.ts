@@ -186,35 +186,51 @@ export const searchAll = (keyword: string): SearchResult[] => {
       lunch: '午餐',
       dinner: '晚餐',
     };
+    const weekNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+    const keywordIsMealType = ['早餐', '午餐', '晚餐'].some(
+      (name) => name.includes(keyword.trim()) || keyword.trim().includes(name)
+    );
+    const keywordIsWeekday = weekNames.some(
+      (name) => name.includes(keyword.trim()) || keyword.trim().includes(name)
+    );
 
     menuPlan.meals.forEach((meal) => {
-      meal.dishes.forEach((dish, dishIdx) => {
-        if (dish.toLowerCase().includes(lowerKeyword)) {
-          const date = weekDates[meal.day];
-          const dateStr = date.toLocaleDateString('zh-CN', {
-            month: 'short',
-            day: 'numeric',
-          });
-          const weekName = getWeekDayName(meal.day);
-
-          results.push({
-            type: '周菜单',
-            item: { ...meal, dishName: dish, dishIdx },
-            title: `🍽️ ${dish}`,
-            description: `${menuPlan.weekStart.slice(
-              0,
-              7
-            )}周 · ${weekName}${dateStr} · ${mealTypeNames[meal.type]}`,
-            route: '/schedule',
-            params: {
-              tab: 'menu',
-              weekStart: menuPlan.weekStart,
-              day: meal.day,
-              mealType: meal.type,
-            },
-          });
-        }
+      const mealTypeName = mealTypeNames[meal.type];
+      const weekName = weekNames[meal.day];
+      const date = weekDates[meal.day];
+      const dateStr = date.toLocaleDateString('zh-CN', {
+        month: 'short',
+        day: 'numeric',
       });
+
+      const matchesDish = meal.dishes.some((dish) =>
+        dish.toLowerCase().includes(lowerKeyword)
+      );
+      const matchesMealType =
+        keywordIsMealType && mealTypeName.includes(keyword.trim());
+      const matchesWeekday =
+        keywordIsWeekday && weekName.includes(keyword.trim());
+
+      if (matchesDish || matchesMealType || matchesWeekday) {
+        const firstDish = meal.dishes[0] || '（空）';
+        results.push({
+          type: '周菜单',
+          item: { ...meal },
+          title: `🍽️ ${weekName}${mealTypeName}`,
+          description: `${menuPlan.weekStart.slice(
+            0,
+            7
+          )}周 · ${dateStr} · ${meal.dishes.join('、') || '暂无菜品'}`,
+          route: '/schedule',
+          params: {
+            tab: 'menu',
+            weekStart: menuPlan.weekStart,
+            day: meal.day,
+            mealType: meal.type,
+          },
+        });
+      }
     });
   }
 

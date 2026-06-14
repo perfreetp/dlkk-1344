@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Plus,
   Trash2,
@@ -14,6 +14,12 @@ import {
   LayoutGrid,
   List,
   ChevronRight,
+  Home,
+  Image,
+  Package,
+  Calendar,
+  Download,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useMemoStore } from '@/store/useMemoStore';
@@ -50,6 +56,7 @@ const MemoPage = ({ initialTab }: MemoPageProps) => {
   const { members } = useFamilyStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchCategory, setSearchCategory] = useState<string>('all');
   const [editingNote, setEditingNote] = useState<StickyNote | null>(null);
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -65,6 +72,7 @@ const MemoPage = ({ initialTab }: MemoPageProps) => {
   useEffect(() => {
     if (initialTab) {
       setActiveTab(initialTab);
+      useNavigationStore.getState().clearNavigation();
     }
   }, [initialTab]);
 
@@ -154,7 +162,76 @@ const MemoPage = ({ initialTab }: MemoPageProps) => {
     window.print();
   };
 
+  const handleExportCSV = () => {
+    const headers = ['序号', '姓名', '关系', '电话', '邮箱', '地址'];
+    const rows = members.map((member, index) => [
+      index + 1,
+      member.name,
+      member.relation,
+      member.phone,
+      member.email,
+      member.address,
+    ]);
+
+    const csvContent = [
+      ['\uFEFF' + headers.join(',')],
+      ...rows.map((row) =>
+        row
+          .map((cell) => {
+            const str = String(cell ?? '');
+            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+              return '"' + str.replace(/"/g, '""') + '"';
+            }
+            return str;
+          })
+          .join(',')
+      ),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateStr = new Date().toISOString().split('T')[0];
+    a.download = `家庭通讯录-${dateStr}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const currentNote = editingNote || (stickyNotes.length > 0 && !stickyNotes[stickyNotes.length - 1].content ? stickyNotes[stickyNotes.length - 1] : null);
+
+  const searchCategories = [
+    { key: 'all', label: '全部' },
+    { key: 'family', label: '家庭树' },
+    { key: 'album', label: '相册' },
+    { key: 'assets', label: '资产' },
+    { key: 'schedule', label: '日程' },
+    { key: 'memo', label: '备忘' },
+  ];
+
+  const categoryTypeMap: Record<string, string[]> = {
+    family: ['家庭成员', '重要日期'],
+    album: ['相册', '照片'],
+    assets: ['资产', '车辆', '借还物品'],
+    schedule: ['旅行计划', '用药提醒', '周菜单'],
+    memo: ['便签'],
+  };
+
+  const filteredResults = useMemo(() => {
+    if (searchCategory === 'all') return searchResults;
+    const types = categoryTypeMap[searchCategory] || [];
+    return searchResults.filter((r) => types.includes(r.type));
+  }, [searchResults, searchCategory]);
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: searchResults.length };
+    Object.entries(categoryTypeMap).forEach(([cat, types]) => {
+      counts[cat] = searchResults.filter((r) => types.includes(r.type)).length;
+    });
+    return counts;
+  }, [searchResults]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -266,7 +343,7 @@ const MemoPage = ({ initialTab }: MemoPageProps) => {
 
           {activeTab === 'search' && (
             <div>
-              <div className="relative mb-6">
+              <div className="relative mb-4">
                 <Search
                   size={20}
                   className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
@@ -274,7 +351,10 @@ const MemoPage = ({ initialTab }: MemoPageProps) => {
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setSearchCategory('all');
+                  }}
                   placeholder="搜索所有内容..."
                   className="input pl-12 text-lg"
                   autoFocus
@@ -282,50 +362,81 @@ const MemoPage = ({ initialTab }: MemoPageProps) => {
               </div>
 
               {searchQuery && (
-                <p className="text-sm text-gray-500 mb-4">
-                  找到 {searchResults.length} 个结果
-                </p>
-              )}
-
-              <div className="space-y-3">
-                {searchResults.map((result, index) => (
-                  <div
-                    key={index}
-                    onClick={() => handleSearchResultClick(result)}
-                    className="p-4 bg-warm-50 rounded-xl hover:bg-warm-100 transition-colors cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-                        <FileText size={20} className="text-primary-500" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="badge bg-primary-100 text-primary-600">
-                            {result.type}
+                <>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {searchCategories.map((cat) => {
+                      const count = categoryCounts[cat.key] || 0;
+                      const isActive = searchCategory === cat.key;
+                      return (
+                        <button
+                          key={cat.key}
+                          onClick={() => setSearchCategory(cat.key)}
+                          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                            isActive
+                              ? 'bg-primary-500 text-white shadow-sm'
+                              : 'bg-warm-100 text-gray-600 hover:bg-warm-200'
+                          }`}
+                        >
+                          {cat.label}
+                          <span
+                            className={`ml-1.5 text-xs ${
+                              isActive
+                                ? 'text-white/80'
+                                : 'text-gray-400'
+                            }`}
+                          >
+                            {count}
                           </span>
-                          <h3 className="font-semibold text-gray-800">
-                            {result.title}
-                          </h3>
-                        </div>
-                        <p className="text-sm text-gray-500 mt-1 truncate">
-                          {result.description}
-                        </p>
-                      </div>
-                      <ChevronRight
-                        size={18}
-                        className="text-gray-300 group-hover:text-primary-500 transition-colors"
-                      />
-                    </div>
+                        </button>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
 
-              {searchQuery && searchResults.length === 0 && (
-                <Empty
-                  icon={<Search size={32} className="text-gray-400" />}
-                  title="没有找到相关结果"
-                  description="试试其他关键词吧"
-                />
+                  <p className="text-sm text-gray-500 mb-4">
+                    找到 {filteredResults.length} 个结果
+                  </p>
+
+                  <div className="space-y-3">
+                    {filteredResults.map((result, index) => (
+                      <div
+                        key={index}
+                        onClick={() => handleSearchResultClick(result)}
+                        className="p-4 bg-warm-50 rounded-xl hover:bg-warm-100 transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
+                            <FileText size={20} className="text-primary-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="badge bg-primary-100 text-primary-600">
+                                {result.type}
+                              </span>
+                              <h3 className="font-semibold text-gray-800">
+                                {result.title}
+                              </h3>
+                            </div>
+                            <p className="text-sm text-gray-500 mt-1 truncate">
+                              {result.description}
+                            </p>
+                          </div>
+                          <ChevronRight
+                            size={18}
+                            className="text-gray-300 group-hover:text-primary-500 transition-colors"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {filteredResults.length === 0 && (
+                    <Empty
+                      icon={<Search size={32} className="text-gray-400" />}
+                      title="没有找到相关结果"
+                      description="试试其他关键词或分类吧"
+                    />
+                  )}
+                </>
               )}
 
               {!searchQuery && (
@@ -335,6 +446,17 @@ const MemoPage = ({ initialTab }: MemoPageProps) => {
                   <p className="text-sm text-gray-400 mt-1">
                     支持搜索家庭成员、相册、资产、日程、便签等所有内容
                   </p>
+                  <div className="flex flex-wrap justify-center gap-2 mt-6">
+                    {['早餐', '生日', '照片', '资产', '便签'].map((kw) => (
+                      <button
+                        key={kw}
+                        onClick={() => setSearchQuery(kw)}
+                        className="px-3 py-1.5 bg-warm-100 text-gray-600 rounded-full text-sm hover:bg-warm-200 transition-colors"
+                      >
+                        # {kw}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -372,10 +494,16 @@ const MemoPage = ({ initialTab }: MemoPageProps) => {
                     </button>
                   </div>
                 </div>
-                <button onClick={handlePrint} className="btn btn-secondary print:hidden">
-                  <Printer size={18} />
-                  打印通讯录
-                </button>
+                <div className="flex gap-2 print:hidden">
+                  <button onClick={handleExportCSV} className="btn btn-secondary">
+                    <FileSpreadsheet size={18} />
+                    导出名单
+                  </button>
+                  <button onClick={handlePrint} className="btn btn-secondary">
+                    <Printer size={18} />
+                    打印
+                  </button>
+                </div>
               </div>
 
               <div className="print-content">

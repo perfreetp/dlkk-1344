@@ -14,6 +14,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useAlbumStore } from '@/store/useAlbumStore';
+import { useNavigationStore } from '@/store/useNavigationStore';
 import type { Album, Photo } from '@/types';
 import { formatDate } from '@/utils/date';
 import Modal from '@/components/Modal/Modal';
@@ -25,6 +26,7 @@ interface AlbumPageProps {
 }
 
 const AlbumPage = ({ initialAlbumId, initialPhotoId }: AlbumPageProps) => {
+  const { clearNavigation } = useNavigationStore();
   const {
     albums,
     photos,
@@ -50,6 +52,8 @@ const AlbumPage = ({ initialAlbumId, initialPhotoId }: AlbumPageProps) => {
   const [showAllPhotos, setShowAllPhotos] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [highlightPhotoId, setHighlightPhotoId] = useState<string | null>(null);
+  const photoRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,22 +61,39 @@ const AlbumPage = ({ initialAlbumId, initialPhotoId }: AlbumPageProps) => {
     if (!selectedAlbumId && albums.length > 0) {
       setSelectedAlbumId(albums[0].id);
     }
+  }, [albums, selectedAlbumId]);
+
+  useEffect(() => {
+    let handled = false;
     if (initialAlbumId) {
       setSelectedAlbumId(initialAlbumId);
+      handled = true;
     }
     if (initialPhotoId) {
       const photo = useAlbumStore.getState().photos.find(
         (p) => p.id === initialPhotoId
       );
       if (photo) {
-        setSelectedPhoto(photo);
-        setShowPhotoDetail(true);
         if (photo.albumId) {
           setSelectedAlbumId(photo.albumId);
         }
+        setSelectedPhoto(photo);
+        setShowPhotoDetail(true);
+        setHighlightPhotoId(photo.id);
+        setTimeout(() => {
+          const el = photoRefs.current[photo.id];
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 200);
+        setTimeout(() => setHighlightPhotoId(null), 2500);
+        handled = true;
       }
     }
-  }, [albums, selectedAlbumId, initialAlbumId, initialPhotoId]);
+    if (handled) {
+      clearNavigation();
+    }
+  }, [initialAlbumId, initialPhotoId, clearNavigation]);
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
@@ -495,12 +516,16 @@ const AlbumPage = ({ initialAlbumId, initialPhotoId }: AlbumPageProps) => {
                   {albumPhotos.map((photo, index) => {
                     const isDragging = draggedIndex === index;
                     const isOver = dragOverIndex === index;
+                    const isHighlighted = highlightPhotoId === photo.id;
                     const photoAlbum = albums.find(
                       (a) => a.id === photo.albumId
                     );
                     return (
                       <div
                         key={photo.id}
+                        ref={(el) => {
+                          photoRefs.current[photo.id] = el;
+                        }}
                         draggable={!showAllPhotos}
                         onDragStart={() => handleDragStart(index)}
                         onDragOver={(e) => handleDragOver(e, index)}
@@ -511,12 +536,19 @@ const AlbumPage = ({ initialAlbumId, initialPhotoId }: AlbumPageProps) => {
                         className={`relative aspect-square rounded-xl overflow-hidden cursor-pointer group transition-all ${
                           isDragging
                             ? 'opacity-50 scale-95 z-50 shadow-2xl'
+                            : isHighlighted
+                            ? 'ring-4 ring-primary-400 ring-offset-2 scale-[1.05] shadow-2xl z-10'
                             : 'hover:shadow-xl hover:-translate-y-1'
                         } ${
                           isOver && !isDragging
                             ? 'ring-4 ring-primary-400 ring-offset-2'
                             : ''
                         }`}
+                        style={
+                          isHighlighted
+                            ? { animation: 'pulse 1.5s infinite' }
+                            : {}
+                        }
                       >
                         <img
                           src={photo.dataUrl}

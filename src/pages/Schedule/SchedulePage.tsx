@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useScheduleStore } from '@/store/useScheduleStore';
+import { useNavigationStore } from '@/store/useNavigationStore';
 import type { Trip, Medication } from '@/types';
 import {
   formatDate,
@@ -41,6 +42,7 @@ interface SchedulePageProps {
 
 const SchedulePage = ({ initialTab, highlightMeal }: SchedulePageProps) => {
   const navigate = useNavigate();
+  const { clearNavigation } = useNavigationStore();
   const [activeTab, setActiveTab] = useState<TabType>(
     initialTab || 'trips'
   );
@@ -79,11 +81,14 @@ const SchedulePage = ({ initialTab, highlightMeal }: SchedulePageProps) => {
   } = useScheduleStore();
 
   useEffect(() => {
+    let handled = false;
     if (initialTab) {
       setActiveTab(initialTab);
+      handled = true;
     }
     if (highlightMeal?.weekStart) {
       setCurrentWeek(new Date(highlightMeal.weekStart));
+      handled = true;
     }
     if (
       highlightMeal?.day !== undefined &&
@@ -96,8 +101,12 @@ const SchedulePage = ({ initialTab, highlightMeal }: SchedulePageProps) => {
       setTimeout(() => {
         setHighlightCell(undefined);
       }, 3000);
+      handled = true;
     }
-  }, [initialTab, highlightMeal]);
+    if (handled) {
+      clearNavigation();
+    }
+  }, [initialTab, highlightMeal, clearNavigation]);
 
   const tabs = [
     { key: 'trips' as TabType, label: '旅行计划', icon: Plane },

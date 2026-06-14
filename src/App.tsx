@@ -188,15 +188,6 @@ function App() {
     };
   }, [targetRoute, targetParams]);
 
-  useEffect(() => {
-    if (targetRoute && targetParams) {
-      const timer = setTimeout(() => {
-        clearNavigation();
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [targetRoute, targetParams, clearNavigation]);
-
   return (
     <Router>
       <Layout>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Plus,
   Edit2,
@@ -18,6 +18,7 @@ import {
   Baby,
 } from 'lucide-react';
 import { useFamilyStore } from '@/store/useFamilyStore';
+import { useNavigationStore } from '@/store/useNavigationStore';
 import type { FamilyMember, ImportantDate } from '@/types';
 import { formatDate, calculateAge, daysUntil } from '@/utils/date';
 import Modal from '@/components/Modal/Modal';
@@ -32,6 +33,7 @@ interface FamilyPageProps {
 }
 
 const FamilyPage = ({ initialMemberId, initialTab }: FamilyPageProps) => {
+  const { clearNavigation } = useNavigationStore();
   const [activeTab, setActiveTab] = useState<TabType>(
     (initialTab as TabType) || 'members'
   );
@@ -40,20 +42,37 @@ const FamilyPage = ({ initialMemberId, initialTab }: FamilyPageProps) => {
   const [editingMember, setEditingMember] = useState<FamilyMember | null>(null);
   const [editingDate, setEditingDate] = useState<ImportantDate | null>(null);
   const [selectedMember, setSelectedMember] = useState<FamilyMember | null>(null);
+  const [highlightMemberId, setHighlightMemberId] = useState<string | null>(null);
+  const memberCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
+    let handled = false;
+    if (initialTab) {
+      setActiveTab(initialTab as TabType);
+      handled = true;
+    }
     if (initialMemberId) {
       const member = useFamilyStore.getState().members.find(
         (m) => m.id === initialMemberId
       );
       if (member) {
+        setActiveTab('members');
         setSelectedMember(member);
+        setHighlightMemberId(member.id);
+        setTimeout(() => {
+          const el = memberCardRefs.current[member.id];
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
+        setTimeout(() => setHighlightMemberId(null), 2500);
+        handled = true;
       }
     }
-    if (initialTab) {
-      setActiveTab(initialTab as TabType);
+    if (handled) {
+      clearNavigation();
     }
-  }, [initialMemberId, initialTab]);
+  }, [initialMemberId, initialTab, clearNavigation]);
 
   const {
     members,
@@ -297,10 +316,23 @@ const FamilyPage = ({ initialMemberId, initialTab }: FamilyPageProps) => {
                 const spouse = getSpouse(member);
                 const parents = getParents(member);
                 const memberDates = getMemberDates(member.id);
+                const isHighlighted = highlightMemberId === member.id;
                 return (
                   <div
                     key={member.id}
-                    className="p-4 bg-warm-50 rounded-2xl hover:shadow-md transition-all cursor-pointer group"
+                    ref={(el) => {
+                      memberCardRefs.current[member.id] = el;
+                    }}
+                    className={`p-4 rounded-2xl transition-all cursor-pointer group ${
+                      isHighlighted
+                        ? 'bg-primary-100 ring-2 ring-primary-400 shadow-lg scale-[1.02]'
+                        : 'bg-warm-50 hover:shadow-md'
+                    }`}
+                    style={
+                      isHighlighted
+                        ? { animation: 'pulse 1.5s infinite' }
+                        : {}
+                    }
                     onClick={() => setSelectedMember(member)}
                   >
                     <div className="flex items-start gap-4">

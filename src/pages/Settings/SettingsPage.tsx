@@ -15,6 +15,7 @@ import {
   Images,
   Package,
   StickyNote as StickyNoteIcon,
+  Calendar,
 } from 'lucide-react';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { useFamilyStore } from '@/store/useFamilyStore';
@@ -363,10 +364,10 @@ const SettingsPage = () => {
       <Modal
         isOpen={showImportConfirm}
         onClose={() => setShowImportConfirm(false)}
-        title="确认导入"
-        size="md"
+        title="确认导入备份"
+        size="lg"
       >
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="p-4 bg-amber-50 rounded-xl">
             <div className="flex items-start gap-3">
               <AlertTriangle
@@ -376,21 +377,121 @@ const SettingsPage = () => {
               <div>
                 <p className="font-medium text-amber-800">重要提醒</p>
                 <p className="text-sm text-amber-700 mt-1">
-                  导入数据将覆盖当前所有数据，包含密码设置。
-                  导入完成后页面将自动刷新，请耐心等待。
+                  导入将<strong>覆盖当前所有数据</strong>，包含密码设置。
+                  导入完成后页面将自动刷新。请确认以下内容无误后再操作。
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-            <FileJson size={24} className="text-blue-500" />
+          {importData && (
             <div>
-              <p className="font-medium text-gray-800">备份文件</p>
-              <p className="text-sm text-gray-500">
-                包含{importData ? '：' + importData.familyMembers?.length + '位成员，' + importData.photos?.length + '张照片等' : '所有家庭数据和密码设置'}
+              <p className="text-sm font-medium text-gray-700 mb-3">
+                备份文件包含以下内容：
               </p>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="p-3 bg-warm-50 rounded-xl flex items-center gap-3">
+                  <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                    <Users size={18} className="text-primary-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">家庭成员</p>
+                    <p className="font-bold text-gray-800">
+                      {importData.familyMembers?.length || 0} 位
+                    </p>
+                  </div>
+                </div>
+                <div className="p-3 bg-sky-50 rounded-xl flex items-center gap-3">
+                  <div className="w-10 h-10 bg-sky-100 rounded-lg flex items-center justify-center">
+                    <Images size={18} className="text-sky-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">照片</p>
+                    <p className="font-bold text-gray-800">
+                      {importData.photos?.length || 0} 张
+                    </p>
+                  </div>
+                </div>
+                <div className="p-3 bg-green-50 rounded-xl flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                    <Package size={18} className="text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">资产</p>
+                    <p className="font-bold text-gray-800">
+                      {importData.assets?.length || 0} 项
+                    </p>
+                  </div>
+                </div>
+                <div className="p-3 bg-purple-50 rounded-xl flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <Calendar size={18} className="text-purple-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">日程</p>
+                    <p className="font-bold text-gray-800">
+                      {(importData.trips?.length || 0) +
+                        (importData.medications?.length || 0)}
+                      项
+                    </p>
+                  </div>
+                </div>
+                <div className="p-3 bg-pink-50 rounded-xl flex items-center gap-3">
+                  <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center">
+                    <StickyNoteIcon size={18} className="text-pink-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">便签</p>
+                    <p className="font-bold text-gray-800">
+                      {importData.stickyNotes?.length || 0} 张
+                    </p>
+                  </div>
+                </div>
+                <div
+                  className={`p-3 rounded-xl flex items-center gap-3 ${
+                    importData.settings?.passwordHash
+                      ? 'bg-green-50'
+                      : 'bg-gray-50'
+                  }`}
+                >
+                  <div
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                      importData.settings?.passwordHash
+                        ? 'bg-green-100'
+                        : 'bg-gray-200'
+                    }`}
+                  >
+                    <Lock
+                      size={18}
+                      className={
+                        importData.settings?.passwordHash
+                          ? 'text-green-500'
+                          : 'text-gray-400'
+                      }
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">密码设置</p>
+                    <p
+                      className={`font-bold ${
+                        importData.settings?.passwordHash
+                          ? 'text-green-600'
+                          : 'text-gray-400'
+                      }`}
+                    >
+                      {importData.settings?.passwordHash ? '已设置' : '未设置'}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
+          )}
+
+          <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
+            <FileJson size={18} className="text-blue-500" />
+            <span className="text-sm text-gray-600">
+              文件格式：JSON · 家庭空间备份文件
+            </span>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
